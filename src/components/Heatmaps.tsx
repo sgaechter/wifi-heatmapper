@@ -14,6 +14,7 @@ import { getColorAt, objectToRGBAString } from "@/lib/utils-gradient";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { HeatmapSlider } from "./Slider";
 
 import { IperfTestProperty } from "@/lib/types";
@@ -87,6 +88,13 @@ export function Heatmaps() {
   const [showSignalStrengthAsPercentage, setShowSignalStrengthAsPercentage] =
     useState(true);
 
+  // Test series comparison state
+  const [compareSeriesIds, setCompareSeriesIds] = useState<string[]>([]);
+  const [comparePointsMap, setComparePointsMap] = useState<
+    Record<string, SurveyPoint[]>
+  >({});
+  const [overlayMode, setOverlayMode] = useState(false);
+
   // const r1 = calculateRadiusByDensity; // bad for small numbers of points
   const r2 = calculateRadiusByBoundingBox;
   // const r3 = calculateOptimalRadius; // bad for small numbers of points
@@ -147,9 +155,14 @@ export function Heatmaps() {
    * @returns array of {x, y, value}
    */
   const generateHeatmapData = useCallback(
-    (metric: MeasurementTestType, testType?: keyof IperfTestProperty) => {
-      const data = points
-        .filter((p) => p.isEnabled)
+    (
+      metric: MeasurementTestType,
+      testType?: keyof IperfTestProperty,
+      sourcePoints?: SurveyPoint[],
+    ) => {
+      const dataPoints = sourcePoints ?? points;
+      const data = dataPoints
+        .filter((p) => p.isEnabled && p.hasMeasurement !== false)
         .map((point) => {
           let value = getMetricValue(point, metric, testType);
           switch (metric) {
@@ -294,6 +307,8 @@ export function Heatmaps() {
     (
       metric: MeasurementTestType,
       testType: keyof IperfTestProperty,
+      sourcePoints?: SurveyPoint[],
+      seriesName?: string,
     ): Promise<string | null> => {
       return (async () => {
         if (
@@ -317,7 +332,7 @@ export function Heatmaps() {
           colorBarWidth +
           labelWidth +
           canvasRightPadding;
-        outputCanvas.height = settings.dimensions.height + 40;
+        outputCanvas.height = settings.dimensions.height + 60;
 
         const ctx = outputCanvas.getContext("2d", { willReadFrequently: true });
         if (!ctx) {
@@ -329,7 +344,7 @@ export function Heatmaps() {
         ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
 
         // get an array of the enabled, non-null points to be plotted
-        const heatmapData = generateHeatmapData(metric, testType);
+        const heatmapData = generateHeatmapData(metric, testType, sourcePoints);
         const heatmapValues = heatmapData.map((p) => p.value);
 
         const { min, max } = getHeatmapRange(
@@ -357,7 +372,16 @@ export function Heatmaps() {
           height: settings.dimensions.height,
         });
 
-        ctx.drawImage(glCanvas, 0, 20);
+        ctx.drawImage(glCanvas, 0, 40);
+
+        // Series title
+        if (seriesName) {
+          ctx.fillStyle = "black";
+          ctx.font = "bold 18px Arial";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "top";
+          ctx.fillText(seriesName, 10, 10);
+        }
 
         if (!heatmapData || heatmapData.length === 0) {
           const lines = ["No heatmap:", `${metric} tests`, "not performed"];
@@ -406,7 +430,7 @@ export function Heatmaps() {
           50,
           settings.dimensions.height,
           settings.dimensions.width + 40,
-          20,
+          40,
           min,
           max,
           metric,
@@ -426,9 +450,16 @@ export function Heatmaps() {
 
   const generateAllHeatmaps = useCallback(async () => {
     const newHeatmaps: { [key: string]: string | null } = {};
+
+    // Current series heatmaps
     for (const metric of selectedMetrics) {
       if (metric === "signalStrength") {
-        newHeatmaps[metric] = await renderHeatmap(metric, "signalStrength");
+        newHeatmaps[metric] = await renderHeatmap(
+          metric,
+          "signalStrength",
+          undefined,
+          settings.series.find((s) => s.id === settings.currentSeriesId)?.name,
+        );
       } else {
         const availableProperties = getAvailableProperties(metric);
         for (const testType of selectedProperties) {
@@ -438,14 +469,66 @@ export function Heatmaps() {
               newHeatmaps[`${metric}-${testType}`] = await renderHeatmap(
                 metric,
                 testType,
+                undefined,
+                settings.series.find((s) => s.id === settings.currentSeriesId)
+                  ?.name,
               );
             }
           }
         }
       }
     }
+
+    // Comparison series heatmaps
+    for (const compareSeriesId of compareSeriesIds) {
+      const comparePoints = comparePointsMap[compareSeriesId];
+      if (!comparePoints) continue;
+      const compareSeriesName =
+        settings.series.find((s) => s.id === compareSeriesId)?.name || compareSeriesId;
+
+      for (const metric of selectedMetrics) {
+        if (metric === "signalStrength") {
+          newHeatmaps[`${metric}-${compareSeriesId}`] = await renderHeatmap(
+            metric,
+            "signalStrength",
+            comparePoints,
+            compareSeriesName,
+          );
+        } else {
+          const availableProperties = getAvailableProperties(metric);
+          for (const testType of selectedProperties) {
+            if (availableProperties.includes(testType)) {
+              const heatmapData = generateHeatmapData(
+                metric,
+                testType,
+                comparePoints,
+              );
+              if (heatmapData) {
+                newHeatmaps[`${metric}-${testType}-${compareSeriesId}`] =
+                  await renderHeatmap(
+                    metric,
+                    testType,
+                    comparePoints,
+                    compareSeriesName,
+                  );
+              }
+            }
+          }
+        }
+      }
+    }
+
     setHeatmaps(newHeatmaps);
-  }, [renderHeatmap, selectedMetrics, selectedProperties, generateHeatmapData]);
+  }, [
+    renderHeatmap,
+    selectedMetrics,
+    selectedProperties,
+    generateHeatmapData,
+    compareSeriesIds,
+    comparePointsMap,
+    settings.series,
+    settings.currentSeriesId,
+  ]);
 
   const openHeatmapModal = (src: string, alt: string) => {
     setSelectedHeatmap({ src, alt });
@@ -466,7 +549,38 @@ export function Heatmaps() {
     selectedMetrics,
     selectedProperties,
     showSignalStrengthAsPercentage,
+    compareSeriesIds,
+    comparePointsMap,
   ]);
+
+  // Load comparison series points when selected
+  useEffect(() => {
+    async function loadComparisonSeries() {
+      const newMap: Record<string, SurveyPoint[]> = {};
+      for (const seriesId of compareSeriesIds) {
+        try {
+          const response = await fetch(
+            `/api/settings?name=${encodeURIComponent(
+              settings.floorplanImageName,
+            )}&seriesId=${encodeURIComponent(seriesId)}`,
+          );
+          if (response.ok) {
+            const data = await response.json();
+            newMap[seriesId] = data.surveyPoints || [];
+          }
+        } catch (err) {
+          logger.error(`Failed to load comparison series ${seriesId}: ${err}`);
+        }
+      }
+      setComparePointsMap(newMap);
+    }
+
+    if (compareSeriesIds.length > 0) {
+      loadComparisonSeries();
+    } else {
+      setComparePointsMap({});
+    }
+  }, [compareSeriesIds, settings.floorplanImageName]);
 
   const toggleMetric = (metric: MeasurementTestType) => {
     setSelectedMetrics((prev) => {
@@ -492,6 +606,14 @@ export function Heatmaps() {
           Object.values(testProperties).indexOf(b),
       );
     });
+  };
+
+  const toggleCompareSeries = (seriesId: string) => {
+    setCompareSeriesIds((prev) =>
+      prev.includes(seriesId)
+        ? prev.filter((id) => id !== seriesId)
+        : [...prev, seriesId],
+    );
   };
 
   return (
@@ -520,6 +642,33 @@ export function Heatmaps() {
           ))}
         </div>
       </div>
+
+      {settings.series.length > 1 && (
+        <div className="mb-4">
+          <h3 className="text-lg font-medium mb-2 text-gray-700">
+            Show series
+          </h3>
+          <div className="flex flex-wrap gap-4">
+            {settings.series
+              .filter((s) => s.id !== settings.currentSeriesId)
+              .map((s) => (
+                <div key={s.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`compare-${s.id}`}
+                    checked={compareSeriesIds.includes(s.id)}
+                    onCheckedChange={() => toggleCompareSeries(s.id)}
+                  />
+                  <label
+                    htmlFor={`compare-${s.id}`}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    {s.name}
+                  </label>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       <div className="mb-6">
         <h3 className="text-lg font-medium mb-2 text-gray-700">
@@ -555,53 +704,75 @@ export function Heatmaps() {
               {metricTitles[metric]}
             </h3>
             {metric === "signalStrength" ? (
-              heatmaps[metric] && (
-                <div>
-                  <div className="mb-4 flex items-center space-x-2">
-                    <Switch
-                      id="signal-strength-percentage"
-                      checked={showSignalStrengthAsPercentage}
-                      onCheckedChange={setShowSignalStrengthAsPercentage}
+              <div className="grid grid-cols-2 gap-4">
+                {heatmaps[metric] && (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-600 mb-1">
+                      {settings.series.find((s) => s.id === settings.currentSeriesId)?.name || "Current"}
+                    </p>
+                    <HeatmapImage
+                      src={heatmaps[metric]}
+                      alt={`Heatmap for ${metricTitles[metric]}`}
+                      onClick={() =>
+                        openHeatmapModal(
+                          heatmaps[metric]!,
+                          `Heatmap for ${metricTitles[metric]}`,
+                        )
+                      }
                     />
-                    <label
-                      htmlFor="signal-strength-percentage"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      Show Signal Strength as Percentage
-                    </label>
                   </div>
-                  <HeatmapImage
-                    src={heatmaps[metric]}
-                    alt={`Heatmap for ${metricTitles[metric]}`}
-                    onClick={() =>
-                      openHeatmapModal(
-                        heatmaps[metric]!,
-                        `Heatmap for ${metricTitles[metric]}`,
-                      )
-                    }
-                  />
-                </div>
-              )
-            ) : (
-              <div className="space-y-4">
-                {selectedProperties.map((testType) => {
-                  const heatmap = heatmaps[`${metric}-${testType}`];
-                  if (!heatmap) {
-                    return null;
-                  }
-                  const alt = `Heatmap for ${metricTitles[metric]} - ${propertyTitles[testType]}`;
+                )}
+                {compareSeriesIds.map((seriesId) => {
+                  const heatmap = heatmaps[`${metric}-${seriesId}`];
+                  const seriesName = settings.series.find((s) => s.id === seriesId)?.name || seriesId;
+                  if (!heatmap) return null;
                   return (
-                    <div key={`${metric}-${testType}`}>
+                    <div key={`${metric}-${seriesId}`}>
+                      <p className="text-sm font-semibold text-gray-600 mb-1">{seriesName}</p>
+                      <HeatmapImage
+                        src={heatmap}
+                        alt={`Heatmap for ${metricTitles[metric]} - ${seriesName}`}
+                        onClick={() => openHeatmapModal(heatmap, seriesName)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {selectedProperties.map((testType) => {
+                  const currentHeatmap = heatmaps[`${metric}-${testType}`];
+                  const entries: { key: string; src: string | null; alt: string }[] = [];
+                  if (currentHeatmap) {
+                    entries.push({
+                      key: `${metric}-${testType}`,
+                      src: currentHeatmap,
+                      alt: `Heatmap for ${metricTitles[metric]} - ${propertyTitles[testType]}`,
+                    });
+                  }
+                  for (const seriesId of compareSeriesIds) {
+                    const compareHeatmap = heatmaps[`${metric}-${testType}-${seriesId}`];
+                    if (compareHeatmap) {
+                      entries.push({
+                        key: `${metric}-${testType}-${seriesId}`,
+                        src: compareHeatmap,
+                        alt: `Heatmap for ${metricTitles[metric]} - ${propertyTitles[testType]} - comparison`,
+                      });
+                    }
+                  }
+
+                  return entries.map(({ key, src, alt }) => (
+                    <div key={key}>
                       <h4 className="text-sm font-medium mb-2 text-gray-600">
                         {propertyTitles[testType]}
                       </h4>
                       <HeatmapImage
-                        src={heatmap}
+                        src={src}
                         alt={alt}
-                        onClick={() => openHeatmapModal(heatmap, alt)}
+                        onClick={() => openHeatmapModal(src, alt)}
                       />
                     </div>
-                  );
+                  ));
                 })}
               </div>
             )}

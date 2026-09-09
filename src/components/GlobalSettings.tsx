@@ -15,7 +15,12 @@ import {
   migrateLocalStorageToFiles,
 } from "../lib/localStorageMigration";
 import { toast } from "./ui/use-toast";
-import { HeatmapSettings, SurveyPoint, SurveyPointActions } from "../lib/types";
+import {
+  HeatmapSettings,
+  SurveyPoint,
+  SurveyPointActions,
+  TestSeries,
+} from "../lib/types";
 import { join } from "path";
 
 /**
@@ -23,11 +28,21 @@ import { join } from "path";
  * @param floorPlan - desired floor plan, or "" if unknown
  * @returns Set of default settings for that floor plan
  */
+const DEFAULT_SERIES_ID = "default";
+
 export const getDefaults = (floorPlan: string): HeatmapSettings => {
   return {
     surveyPoints: [],
     floorplanImageName: floorPlan,
     floorplanImagePath: join("/media", floorPlan),
+    currentSeriesId: DEFAULT_SERIES_ID,
+    series: [
+      {
+        id: DEFAULT_SERIES_ID,
+        name: "Default",
+        createdAt: Date.now(),
+      },
+    ],
     iperfServerAdrs: "localhost",
     apMapping: [],
     testDuration: 1,
@@ -53,7 +68,7 @@ export const getDefaults = (floorPlan: string): HeatmapSettings => {
       udpDownload: "iperf3 -c {server} {port} -t {duration} -R -u -b 100M -J",
       udpUpload: "iperf3 -c {server} {port} -t {duration} -u -b 100M -J",
     },
-    // these two props were used for the "scan wifi" effort
+    // these two props were used for the "scan-wifi" branch
     // that has been (temporarily?) abandoned
     // sameSSID: "same",
     // ignoredSSIDs: ["AP-WH4E-C0BFBE6ACDA3", "LochLymeLodge-UB"],
@@ -64,7 +79,9 @@ interface SettingsContextType {
   settings: HeatmapSettings;
   updateSettings: (newSettings: Partial<HeatmapSettings>) => void;
   surveyPointActions: SurveyPointActions;
-  readNewSettingsFromFile: (theFile: string) => void;
+  readNewSettingsFromFile: (theFile: string, seriesId?: string) => void;
+  createTestSeries: (name: string) => string;
+  switchTestSeries: (seriesId: string) => void;
 }
 
 // Create the context
@@ -84,6 +101,9 @@ export function useSettings() {
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<HeatmapSettings>(getDefaults(""));
   const [floorplanImage, setFloorplanImage] = useState<string>("");
+  const [seriesIdToLoad, setSeriesIdToLoad] = useState<string | undefined>(
+    undefined,
+  );
   const migrationDone = useRef(false);
   const defaultFloorPlan = "EmptyFloorPlan.png";
 
@@ -106,10 +126,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         migrationDone.current = true;
       }
 
-      // Load settings for current floorplan
+      // Load settings for current floorplan / series
       const floorPlanToLoad = floorplanImage || defaultFloorPlan;
-      const newHeatmapSettings: HeatmapSettings | null =
-        await readSettingsFromFile(floorPlanToLoad);
+      const seriesToLoad = seriesIdToLoad || settings.currentSeriesId;
+      const [newHeatmapSettings, envPassword] = await Promise.all([
+        readSettingsFromFile(floorPlanToLoad, seriesToLoad),
+        fetch("/api/env-password")
+          .then((res) => (res.ok ? res.json() : { sudoerPassword: "" }))
+          .catch(() => ({ sudoerPassword: "" })),
+      ]);
 
       // Merge with defaults to ensure all fields exist (handles old/incomplete files)
       const defaults = getDefaults(floorPlanToLoad);
@@ -117,28 +142,78 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const mergedSettings = {
           ...defaults,
           ...newHeatmapSettings,
-          sudoerPassword: "",
+          sudoerPassword: envPassword.sudoerPassword || "",
         };
         setSettings(mergedSettings);
       } else {
-        writeSettingsToFile(defaults);
-        setSettings(defaults);
+        const initial = {
+          ...defaults,
+          currentSeriesId: seriesToLoad,
+          sudoerPassword: envPassword.sudoerPassword || "",
+        };
+        writeSettingsToFile(initial);
+        setSettings(initial);
       }
+      setSeriesIdToLoad(undefined);
     }
     loadSettings();
-  }, [floorplanImage]);
+  }, [floorplanImage, seriesIdToLoad]);
 
-  const readNewSettingsFromFile = (fileName: string) => {
-    setFloorplanImage(fileName); // set the new floorplanImage, and let useEffect() do the work
+  const readNewSettingsFromFile = (fileName: string, seriesId?: string) => {
+    setFloorplanImage(fileName);
+    if (seriesId) {
+      setSeriesIdToLoad(seriesId);
+    }
   };
 
   // Function to update settings (only allows partial updates)
   const updateSettings = (newSettings: Partial<HeatmapSettings>) => {
     setSettings((prev) => {
       const updatedSettings = { ...prev, ...newSettings };
-      writeSettingsToFile(updatedSettings); // Save to file
+      writeSettingsToFile(updatedSettings);
       return updatedSettings;
     });
+  };
+
+  /**
+   * createTestSeries - create a new test series for the current floorplan.
+   * If points exist, copy their positions as placeholder points (white, no measurement).
+   * Returns the new series id.
+   */
+  const createTestSeries = (name: string): string => {
+    const newSeriesId = `series_${Date.now()}`;
+    const newSeries: TestSeries = {
+      id: newSeriesId,
+      name: name.trim() || newSeriesId,
+      createdAt: Date.now(),
+    };
+
+    const placeholderPoints: SurveyPoint[] = settings.surveyPoints.map(
+      (point) => ({
+        ...point,
+        seriesId: newSeriesId,
+        hasMeasurement: false,
+        isEnabled: true,
+      }),
+    );
+
+    const newSettings: HeatmapSettings = {
+      ...settings,
+      currentSeriesId: newSeriesId,
+      series: [...settings.series, newSeries],
+      surveyPoints: placeholderPoints,
+      nextPointNum: 1,
+    };
+
+    updateSettings(newSettings);
+    return newSeriesId;
+  };
+
+  /**
+   * switchTestSeries - load a different test series for the current floorplan.
+   */
+  const switchTestSeries = (seriesId: string) => {
+    readNewSettingsFromFile(settings.floorplanImageName, seriesId);
   };
 
   // SurveyPoint actions
@@ -173,6 +248,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         updateSettings,
         surveyPointActions,
         readNewSettingsFromFile,
+        createTestSeries,
+        switchTestSeries,
       }}
     >
       {children}

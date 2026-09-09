@@ -83,10 +83,18 @@ export interface IperfCommands {
  * The full set of data for a particular background image
  * This is "global" to the entire GUI, and passed down as needed
  */
+export interface TestSeries {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
 export interface HeatmapSettings {
   surveyPoints: SurveyPoint[];
   floorplanImageName: string; // name of the floorplan-filename
   floorplanImagePath: string; // path to the /media/floorplan-filename
+  currentSeriesId: string; // id of the active test series
+  series: TestSeries[]; // all test series for this floorplan
   iperfServerAdrs: string;
   testDuration: number;
   sudoerPassword: string; // kept in settings, removed before writing to file
@@ -131,6 +139,8 @@ export type SurveyPoint = {
   timestamp: number;
   id: string;
   isEnabled: boolean;
+  seriesId?: string; // belongs to a specific test series if set
+  hasMeasurement?: boolean; // false for placeholder points copied into a new series
 };
 
 /**
