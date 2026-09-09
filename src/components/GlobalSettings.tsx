@@ -129,11 +129,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       // Load settings for current floorplan / series
       const floorPlanToLoad = floorplanImage || defaultFloorPlan;
       const seriesToLoad = seriesIdToLoad || settings.currentSeriesId;
-      const [newHeatmapSettings, envPassword] = await Promise.all([
+      const [newHeatmapSettings, envConfig] = await Promise.all([
         readSettingsFromFile(floorPlanToLoad, seriesToLoad),
-        fetch("/api/env-password")
-          .then((res) => (res.ok ? res.json() : { sudoerPassword: "" }))
-          .catch(() => ({ sudoerPassword: "" })),
+        fetch("/api/env-config")
+          .then((res) =>
+            res.ok
+              ? res.json()
+              : { sudoerPassword: "", iperfServerAdrs: "localhost" },
+          )
+          .catch(() => ({ sudoerPassword: "", iperfServerAdrs: "localhost" })),
       ]);
 
       // Merge with defaults to ensure all fields exist (handles old/incomplete files)
@@ -142,14 +146,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const mergedSettings = {
           ...defaults,
           ...newHeatmapSettings,
-          sudoerPassword: envPassword.sudoerPassword || "",
+          sudoerPassword: envConfig.sudoerPassword || "",
+          iperfServerAdrs:
+            newHeatmapSettings.iperfServerAdrs ||
+            envConfig.iperfServerAdrs ||
+            "localhost",
         };
         setSettings(mergedSettings);
       } else {
         const initial = {
           ...defaults,
           currentSeriesId: seriesToLoad,
-          sudoerPassword: envPassword.sudoerPassword || "",
+          sudoerPassword: envConfig.sudoerPassword || "",
+          iperfServerAdrs: envConfig.iperfServerAdrs || "localhost",
         };
         writeSettingsToFile(initial);
         setSettings(initial);

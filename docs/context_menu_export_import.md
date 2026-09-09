@@ -145,7 +145,7 @@ Frontend:
 - Passwörter und andere sensible Daten dürfen nie in Exportdateien landen.
 - Beim Import sollten unbekannte Felder ignoriert und das Schema validiert werden.
 - Dateinamen müssen gesäubert werden (kein Path-Traversal).
-- Optional kann das sudo-Passwort in einer `.env`-Datei auf dem Server hinterlegt werden, siehe `.env.example`.
+- Optional können sudo-Passwort und iperf3-Serveradresse in einer `.env`-Datei auf dem Server hinterlegt werden, siehe `.env.example`.
 
 ### 5. Erweiterungen für später
 
