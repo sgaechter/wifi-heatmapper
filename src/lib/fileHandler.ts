@@ -16,34 +16,56 @@ import { HeatmapSettings } from "./types";
 
 export async function readSettingsFromFile(
   fileName: string,
+  seriesId?: string,
 ): Promise<HeatmapSettings | null> {
   try {
     if (!fileName) {
       return null;
     }
 
-    const response = await fetch(
-      `/api/settings?name=${encodeURIComponent(fileName)}`,
-    );
+    const params = new URLSearchParams();
+    params.set("name", fileName);
+    if (seriesId) {
+      params.set("seriesId", seriesId);
+    }
+
+    const response = await fetch(`/api/settings?${params.toString()}`);
 
     if (response.status === 404) {
       return null; // Survey doesn't exist yet
     }
 
     if (!response.ok) {
-      console.error("Error reading settings:", await response.text());
+      const contentType = response.headers.get("content-type") || "";
+      const body = contentType.includes("application/json")
+        ? JSON.stringify(await response.json(), null, 2)
+        : await response.text();
+      console.error("Error reading settings:", body);
       return null;
     }
 
     const parsedData = await response.json();
 
     // Migration: Earlier versions used iperfResults instead of iperfData
-    // Copy iperfResults to iperfData if present
     if (parsedData.surveyPoints?.[0]?.iperfResults !== undefined) {
       for (const point of parsedData.surveyPoints) {
         point.iperfData = point.iperfResults;
         delete point.iperfResults;
       }
+    }
+
+    // Migration: ensure series and currentSeriesId exist for older files
+    if (!parsedData.currentSeriesId) {
+      parsedData.currentSeriesId = "default";
+    }
+    if (!parsedData.series || parsedData.series.length === 0) {
+      parsedData.series = [
+        {
+          id: "default",
+          name: "Default",
+          createdAt: Date.now(),
+        },
+      ];
     }
 
     return parsedData;
@@ -66,11 +88,15 @@ export async function writeSettingsToFile(
     });
 
     if (!response.ok) {
+      const contentType = response.headers.get("content-type") || "";
+      const body = contentType.includes("application/json")
+        ? JSON.stringify(await response.json(), null, 2)
+        : await response.text();
       console.error(
         `[wifi-heatmapper] Failed to save settings for "${settings.floorplanImageName}":`,
         response.status,
         response.statusText,
-        await response.text(),
+        body,
       );
     }
   } catch (error) {
