@@ -33,6 +33,7 @@ export default function ClickableFloorplan(): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedPoint, setSelectedPoint] = useState<SurveyPoint | null>(null);
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
+  const [isHoveringPopup, setIsHoveringPopup] = useState(false);
   // const [dimensions, setDimensions] = useState(settings.dimensions);
   const [scale, setScale] = useState(1);
   const [alertMessage, setAlertMessage] = useState("");
@@ -581,25 +582,39 @@ export default function ClickableFloorplan(): ReactNode {
           onClick={handleCanvasClick}
           onContextMenu={handleContextMenu}
           onMouseMove={handleCanvasMouseMove}
-          onMouseLeave={() => setSelectedPoint(null)}
+          onMouseLeave={() => {
+            if (!isHoveringPopup) {
+              setSelectedPoint(null);
+            }
+          }}
           className="border border-gray-300 rounded-lg cursor-pointer"
         />
 
-        <div
-          style={{
-            position: "absolute",
-            left: `${popupPosition.x}px`,
-            top: `${popupPosition.y}px`,
-            transform: "translate(10px, -50%)",
-          }}
-        >
-          <PopupDetails
-            point={selectedPoint}
-            settings={settings}
-            surveyPointActions={surveyPointActions}
-            onClose={closePopup}
-          />
-        </div>
+        {selectedPoint && (
+          <div
+            style={{
+              position: "absolute",
+              left: `${popupPosition.x}px`,
+              top: `${popupPosition.y}px`,
+              transform: "translate(10px, -50%)",
+            }}
+            onMouseEnter={() => setIsHoveringPopup(true)}
+            onMouseLeave={() => {
+              setIsHoveringPopup(false);
+              setSelectedPoint(null);
+            }}
+          >
+            <PopupDetails
+              point={selectedPoint}
+              settings={settings}
+              surveyPointActions={surveyPointActions}
+              onClose={() => {
+                setIsHoveringPopup(false);
+                closePopup();
+              }}
+            />
+          </div>
+        )}
 
         {isToastOpen && (
           <NewToast
