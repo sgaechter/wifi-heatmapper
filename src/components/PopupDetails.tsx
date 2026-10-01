@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { SurveyPoint, HeatmapSettings, SurveyPointActions } from "@/lib/types";
 import { formatMacAddress, metricFormatter } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -50,8 +50,6 @@ const PopupDetails: React.FC<PopupDetailsProps> = ({
   // | Position | X: 274, Y: 47 |
   // | Created  | 9/16/2025, 9:39:44 PM |
 
-  // const { settings, updateSettings } = useSettings();
-  const [isEnabled, setIsEnabled] = useState(point.isEnabled);
   const rows = [
     { label: "ID", value: point.id },
     { label: "SSID", value: point.wifiData?.ssid },
@@ -103,11 +101,7 @@ const PopupDetails: React.FC<PopupDetailsProps> = ({
    * Report back to the parent
    */
   const handleToggle = () => {
-    setIsEnabled((prev) => {
-      const newState = !prev;
-      surveyPointActions.update(point, { isEnabled: newState });
-      return newState;
-    });
+    surveyPointActions.update(point, { isEnabled: !point.isEnabled });
   };
 
   /**
@@ -144,7 +138,7 @@ const PopupDetails: React.FC<PopupDetailsProps> = ({
       </Table>
       <div className="flex justify-between items-center px-2 py-2 bg-gray-100">
         <div className="flex items-center space-x-2">
-          <Switch checked={isEnabled} onCheckedChange={handleToggle} />
+          <Switch checked={point.isEnabled} onCheckedChange={handleToggle} />
           <span>Enabled</span>
         </div>
         <AlertDialogModal
