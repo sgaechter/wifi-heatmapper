@@ -7,6 +7,7 @@ import HeatmapAdvancedConfig from "./HeatmapAdvancedConfig";
 import MediaDropdown from "./MediaDropdown";
 import { sanitizeFilename } from "@/lib/utils";
 import { useRef } from "react";
+import { Trash2 } from "lucide-react";
 
 export default function SettingsEditor() {
   const { settings, updateSettings, readNewSettingsFromFile } = useSettings();
@@ -19,6 +20,32 @@ export default function SettingsEditor() {
    */
   function handleNewImageFile(theFile: string): void {
     readNewSettingsFromFile(theFile); // tell the parent about the new file
+  }
+
+  async function handleDeleteFloorplan() {
+    const name = settings.floorplanImageName;
+    if (!name || name === "EmptyFloorPlan.png") return;
+
+    const ok = confirm(
+      `Delete floor plan "${name}" and all its survey data? This cannot be undone.`,
+    );
+    if (!ok) return;
+
+    try {
+      const response = await fetch(
+        `/api/media?name=${encodeURIComponent(name)}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(body);
+      }
+      readNewSettingsFromFile("EmptyFloorPlan.png");
+    } catch (err) {
+      alert(`Delete failed: ${err}`);
+    }
   }
 
   async function handleExport() {
@@ -82,10 +109,25 @@ export default function SettingsEditor() {
             </Label>
           </td>
           <td className="max-w-[400px] p-0 m-0">
-            <MediaDropdown
-              defaultValue={settings.floorplanImageName}
-              onChange={(val) => handleNewImageFile(val)}
-            />
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <MediaDropdown
+                  defaultValue={settings.floorplanImageName}
+                  onChange={(val) => handleNewImageFile(val)}
+                />
+              </div>
+              {settings.floorplanImageName &&
+                settings.floorplanImageName !== "EmptyFloorPlan.png" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteFloorplan}
+                    title="Delete floor plan"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </Button>
+                )}
+            </div>
             {settings.floorplanImageName && (
               <p className="text-xs text-gray-500 mt-1">
                 Data: data/surveys/
