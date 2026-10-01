@@ -126,43 +126,6 @@ To take advantage of `iperf3` throughput (speed) tests:
    * Check the connection to the iperf3 server
       with `iperf3 -c address-of-iperf3-server`
 
-## Usage with Docker
-
-WiFi Heatmapper includes a Dockerfile that automates much of
-the installation process for Linux.
-_NB: The Dockerfile does not work on macOS or Windows.
-See the note in the Dockerfile for more information._
-
-1. Build the Docker Image
-
-   ```bash
-   docker build -t wifi-heatmapper .
-   ```
-
-2. Run the Container
-
-   ```bash
-   docker run \
-   --net="host" \
-   --privileged \
-   -v ./datas/data:/app/data \
-   -v ./datas/media:/app/public/media \
-   -v /var/run/dbus:/var/run dbus \
-   wifi-heatmapper
-   ```
-
-### Docker Tips
-
-* Use `-v` options if you want to save db + floorplan picture
-  to the _datas_ folder
-* Ctl-C to abort the Docker container
-* If you want to "ssh into the Docker container", execute this:
-  `docker exec -it container-name /bin/bash`
-  where `container-name` is shown in the `docker ps` command
-* _Note: `networkmanager` needs to use `dbus` to communicate within
-  a Docker container.
-  The `/var/run/dbus...` line accomplishes this._
-
 ## History
 
 This project is a WiFi heatmapper solution for macOS/Windows/Linux, inspired by [python-wifi-survey-heatmap](https://github.com/jantman/python-wifi-survey-heatmap).

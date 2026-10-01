@@ -13,7 +13,6 @@ import {
   normalizeMacAddress,
   rssiToPercentage,
 } from "./utils";
-import isDocker from "is-docker";
 import { getLogger } from "./logger";
 const logger = getLogger("wifi-Linux");
 
@@ -90,10 +89,8 @@ export class LinuxWifiActions implements WifiActions {
     }
 
     // Linux requires a sudo password
-    // but Docker doesn't
-    if (!reason && !isDocker()) {
+    if (!reason) {
       if (!settings.sudoerPassword || settings.sudoerPassword == "") {
-        // don't require sudo password on a Docker container
         reason = "Please set sudo password. It is required on Linux.";
       }
 
@@ -241,13 +238,7 @@ async function inferWifiDeviceIdOnLinux(): Promise<string> {
 }
 
 async function iwDevLink(interfaceId: string, pw: string): Promise<string> {
-  // const command = `echo "${pw}" | sudo -S iw dev ${interfaceId} link`;
-
-  let command = `iw dev ${interfaceId} link`;
-  if (!isDocker()) {
-    command = `echo "${pw}" | sudo -S ` + command;
-  }
-
+  const command = `echo "${pw}" | sudo -S iw dev ${interfaceId} link`;
   const { stdout } = await execAsync(command);
   return stdout;
 }

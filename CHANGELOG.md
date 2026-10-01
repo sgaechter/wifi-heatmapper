@@ -55,13 +55,6 @@ _This section follows the precepts of [Keep a Changelog](https://keepachangelog.
   to indicate the location of the click.
   The circle gets filled in when the measurement completes,
   or removed if there is an error or the measurement is cancelled.
-* Dockerfile now works with new WifiActions.
-  Required installation of `networkmanager` and `networkmanager-cli`
-  along with some fiddling with `docker run ...` command
-* Eliminated the sudo password requirement on Docker:
-  even though the container runs Alpine Linux,
-  the process runs as root in a Docker container.
-  Fixes #56
 * Changed all public-facing names to use the term "Wi-Fi" - the (mostly)
   accepted "official" name.
 * Factor wifi into separate `WifiActions`.

@@ -22,7 +22,6 @@ It's printed in the terminal after you start wifi-heatmapper:
 * Node version:
 * OS: [e.g. iOS, Windows, Linux]
 * OS version [e.g. macOS 15 Sequoia, Win 11, Ubuntu 22]
-* Docker container or not
 * Browser [e.g. chrome, safari]
 * iperf version (`iperf3 --version`):
 

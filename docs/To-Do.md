@@ -123,7 +123,7 @@ Ideas for making the program better - in no particular order:
   Interim step: rename localStorage() with "wifi-heatmap-IMAGE_NAME"?
 * ~~Find out how to get RSSI and other stuff from `ioreg` so sudo is not needed (for `wdutil`)~~ _Likely, not possible_
 * ~~Infer the relevant command/OS version and use the relevant commands and parser based on that to make this multi-platform.~~ Done
-* ~~Make version 0.2.1 work with Docker (currently gives error attempting to locate the _localization_ directory)~~
+
 * ~~Load/save heatmap config to database~~ 
 * Alternative: Save the JSON data to localStorage() with a name like `wifi-heatmapper-floorPlanImagename`, and come up with a means of selecting one or the other. [DONE]
 * Create a "Signal strength only" setting for quicker surveys.

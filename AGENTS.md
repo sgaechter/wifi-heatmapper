@@ -4,7 +4,7 @@
 
 - Next.js 15 app (App Router) with a local Node backend, React frontend, WebGL heatmap rendering.
 - Survey data is stored as plain JSON in `data/surveys/`; floorplan images live in `public/media/`.
-- The app runs on the **host OS** (Windows/macOS/Linux). The Dockerfile is Linux-only because `--privileged` and `--net=host` do not expose host Wi-Fi on macOS/Windows.
+- The app runs on the **host OS** (Windows/macOS/Linux). Docker support has been removed because container networking cannot reliably access host Wi-Fi interfaces.
 
 ## Essential commands
 
@@ -46,7 +46,6 @@ CI order (matches `.github/workflows/ci.yaml`): `npm install` → `npm run check
 - **iperf3**: TCP/UDP heatmaps only show data if the iperf server is set to something other than `localhost` and the server is reachable. `localhost` explicitly disables throughput tests.
 - **macOS 15+**: SSID/BSSID may be redacted by the OS; the app works around SSID via `system_profiler`, but BSSID is often unavailable.
 - **Linux**: `iw` and/or `nmcli` must be installed and in `PATH`.
-- **Docker volume paths**: data is persisted at `./datas/data` and `./datas/media` on the host.
 - **Build**: `npm run build` uses the default Next.js build; `next.config.mjs` does not enable static export by default.
 
 ## Files an agent should read when starting
